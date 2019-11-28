@@ -112,6 +112,9 @@ def get_sessions(hostname, port, https, token):
 
 def get_duration_by_user(stats):
     users = stats.get("MediaContainer").get("Account")
+    if not users:
+        return None
+
     plays_by_user = [{
         "user": user,
         "all_plays": filter(lambda elt: elt.get("accountID") == user.get("id"), [e for e in stats.get("MediaContainer").get("StatisticsMedia")])
@@ -128,6 +131,9 @@ def get_duration_by_user(stats):
 
 def get_duration_by_device(stats):
     devices = stats.get("MediaContainer").get("Device")
+    if not devices:
+        return None
+
     plays_by_device = [{
         "device": device,
         "all_plays": filter(lambda elt: elt.get("deviceID") == device.get("id"), [e for e in stats.get("MediaContainer").get("StatisticsMedia")])
@@ -144,6 +150,8 @@ def get_duration_by_device(stats):
 
 def get_duration_by_platform(stats):
     durations = get_duration_by_device(stats)
+    if not durations:
+        return None
 
     durations_by_platform = {}
     for d in durations:
@@ -167,16 +175,19 @@ def get_play_stats(hostname, port, https, token, timestamp):
 
 def add_stats_perfdata(hostname, port, https, token, label, timestamp):
     by_user, by_device, by_platform = get_play_stats(hostname, port, https, token, timestamp)
-    for s in by_user:
-        user = s.get("user").get("name").split("@")[0]
-        add_perfdata("play_by_user_%s_%s" % (label, user), s.get("duration"))
+    if by_user:
+        for s in by_user:
+            user = s.get("user").get("name").split("@")[0]
+            add_perfdata("play_by_user_%s_%s" % (label, user), s.get("duration"))
 
-    for d in by_device:
-        device = d.get("device").get("name")
-        add_perfdata("play_by_device_%s_%s" % (label, device), d.get("duration"))
+    if by_device:
+        for d in by_device:
+            device = d.get("device").get("name")
+            add_perfdata("play_by_device_%s_%s" % (label, device), d.get("duration"))
 
-    for p in by_platform:
-        add_perfdata("play_by_platform_%s_%s" % (label, p), by_platform[p])
+    if by_platform:
+        for p in by_platform:
+            add_perfdata("play_by_platform_%s_%s" % (label, p), by_platform[p])
 
 def get_stats(hostname, port, https, token):
     global output
@@ -205,6 +216,8 @@ def get_stats(hostname, port, https, token):
     sessions = get_sessions(hostname, port, https, token)
     inactive_sessions_counter = 0
     active_sessions_counter = 0
+    transcode_sessions = 0
+    directplay_sessions = 0
 
     if sessions:
         for session in sessions:
@@ -213,14 +226,23 @@ def get_stats(hostname, port, https, token):
                     active_sessions_counter += 1
                 else:
                     inactive_sessions_counter += 1
+            if session.get("TranscodeSession"):
+                if session.get("TranscodeSession").get("videoDecision") == "transcode":
+                    transcode_sessions += 1
+                else:
+                    directplay_sessions += 1
 
     add_perfdata("session_total", active_sessions_counter + inactive_sessions_counter)
     add_perfdata("session_active", active_sessions_counter)
     add_perfdata("session_inactive", inactive_sessions_counter)
+    add_perfdata("transcode_sessions", transcode_sessions)
+    add_perfdata("directplay_sessions", directplay_sessions)
 
     add_perfdata("response_time", resp_time)
 
 
+    # Play stats for last hour
+    add_stats_perfdata(hostname, port, https, token, "hour", int(time.time()) - 60*60)
     # Play stats for today
     add_stats_perfdata(hostname, port, https, token, "today", int(time.time()) - 60*60*24)
     # Play stats for the last week
