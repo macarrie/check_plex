@@ -231,6 +231,8 @@ def get_stats(hostname, port, https, token):
                     transcode_sessions += 1
                 else:
                     directplay_sessions += 1
+            else:
+                directplay_sessions += 1
 
     add_perfdata("session_total", active_sessions_counter + inactive_sessions_counter)
     add_perfdata("session_active", active_sessions_counter)
